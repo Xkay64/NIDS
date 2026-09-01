@@ -1,3 +1,6 @@
 nids-env/
 *.log
 __pycache__/
+.venv/
+logs/*.log
+.env
