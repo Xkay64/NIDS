@@ -7,6 +7,10 @@ SYN_ONLY_THRESHOLD = 100
 SYN_TIME_WINDOW = timedelta(seconds=10)
 syn_timestamps = {}
 
+PORT_SCAN_THRESHOLD = 20
+PORT_SCAN_TIME_WINDOW = timedelta(seconds=10)
+port_scan_activity = {}
+
 ALERT_COOLDOWN = timedelta(seconds=60)
 last_alert_time = {}
 
@@ -40,17 +44,18 @@ def detect_intrusion(packet):
             dport = packet[TCP].dport
             flags = packet[TCP].flags
 
-            # Detect SYN scan within a time window
+            # Detect SYN-based suspicious activity
             if flags == "S":
                 now = datetime.now()
 
+                # -----------------------------
+                # SYN volume detection
+                # -----------------------------
                 if ip_src not in syn_timestamps:
                     syn_timestamps[ip_src] = []
 
-                # Record the current SYN packet
                 syn_timestamps[ip_src].append(now)
 
-                # Remove SYN packets that are older than the detection window
                 cutoff_time = now - SYN_TIME_WINDOW
                 syn_timestamps[ip_src] = [
                     timestamp
@@ -58,13 +63,44 @@ def detect_intrusion(packet):
                     if timestamp >= cutoff_time
                 ]
 
-                # Trigger if too many SYN packets occur within the time window
                 if len(syn_timestamps[ip_src]) > SYN_ONLY_THRESHOLD:
                     alert_key = f"syn_scan:{ip_src}"
                     log_alert(
                         f"[!] Possible SYN scan from {ip_src}",
                         alert_key
                     )
+
+                # -----------------------------
+                # Unique destination port scan detection
+                # -----------------------------
+                scan_key = (ip_src, ip_dst)
+
+                if scan_key not in port_scan_activity:
+                    port_scan_activity[scan_key] = []
+
+                port_scan_activity[scan_key].append((now, dport))
+
+                port_cutoff = now - PORT_SCAN_TIME_WINDOW
+                port_scan_activity[scan_key] = [
+                    (timestamp, port)
+                    for timestamp, port in port_scan_activity[scan_key]
+                    if timestamp >= port_cutoff
+                ]
+
+                unique_ports = {
+                    port
+                    for _, port in port_scan_activity[scan_key]
+                }
+
+                if len(unique_ports) >= PORT_SCAN_THRESHOLD:
+                    alert_key = f"port_scan:{ip_src}:{ip_dst}"
+                    log_alert(
+                        f"[!] Possible port scan from {ip_src} to {ip_dst}: "
+                        f"{len(unique_ports)} unique ports within "
+                        f"{int(PORT_SCAN_TIME_WINDOW.total_seconds())} seconds",
+                        alert_key
+                    )
+
 
         elif UDP in packet:
             sport = packet[UDP].sport
