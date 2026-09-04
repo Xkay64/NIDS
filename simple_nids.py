@@ -3,8 +3,9 @@ from datetime import datetime, timedelta
 
 ALERT_LOG = "alerts.log"
 SUSPICIOUS_PORTS = [4444, 31337, 23]  # Backdoor/Telnet
-SYN_ONLY_THRESHOLD = 100  # SYN packets per IP before flagging
-syn_counter = {}
+SYN_ONLY_THRESHOLD = 100
+SYN_TIME_WINDOW = timedelta(seconds=10)
+syn_timestamps = {}
 
 ALERT_COOLDOWN = timedelta(seconds=60)
 last_alert_time = {}
@@ -39,18 +40,26 @@ def detect_intrusion(packet):
             dport = packet[TCP].dport
             flags = packet[TCP].flags
 
-             # Detect suspicious destination ports
-            if dport in SUSPICIOUS_PORTS:
-                alert_key = f"suspicious_port:{ip_src}:{ip_dst}:{dport}"
-                log_alert(
-                    f"[!] Suspicious port access from {ip_src} to port {dport}",
-                    alert_key
-                )
-
-            # Detect SYN scan
+            # Detect SYN scan within a time window
             if flags == "S":
-                syn_counter[ip_src] = syn_counter.get(ip_src, 0) + 1
-                if syn_counter[ip_src] > SYN_ONLY_THRESHOLD:
+                now = datetime.now()
+
+                if ip_src not in syn_timestamps:
+                    syn_timestamps[ip_src] = []
+
+                # Record the current SYN packet
+                syn_timestamps[ip_src].append(now)
+
+                # Remove SYN packets that are older than the detection window
+                cutoff_time = now - SYN_TIME_WINDOW
+                syn_timestamps[ip_src] = [
+                    timestamp
+                    for timestamp in syn_timestamps[ip_src]
+                    if timestamp >= cutoff_time
+                ]
+
+                # Trigger if too many SYN packets occur within the time window
+                if len(syn_timestamps[ip_src]) > SYN_ONLY_THRESHOLD:
                     alert_key = f"syn_scan:{ip_src}"
                     log_alert(
                         f"[!] Possible SYN scan from {ip_src}",
@@ -61,11 +70,16 @@ def detect_intrusion(packet):
             sport = packet[UDP].sport
             dport = packet[UDP].dport
 
-        print(f"[*] {ip_src}:{sport} -> {ip_dst}:{dport} | Proto: {proto} | Len: {pkt_len}")
+        print(
+            f"[*] {ip_src}:{sport} -> {ip_dst}:{dport} | "
+            f"Proto: {proto} | Len: {pkt_len}"
+        )
+
 
 def start_sniff(interface="eth0"):
     print(f"[~] Starting NIDS on {interface}... Press Ctrl+C to stop.")
     sniff(iface=interface, prn=detect_intrusion, store=False)
+
 
 if __name__ == "__main__":
     import sys
