@@ -1,7 +1,9 @@
 from scapy.all import sniff, IP, TCP, UDP
 from datetime import datetime, timedelta
+import json
 
 ALERT_LOG = "alerts.log"
+JSON_ALERT_LOG = "alerts.jsonl"
 SUSPICIOUS_PORTS = [4444, 31337, 23]  # Backdoor/Telnet
 SYN_ONLY_THRESHOLD = 100
 SYN_TIME_WINDOW = timedelta(seconds=10)
@@ -14,7 +16,13 @@ port_scan_activity = {}
 ALERT_COOLDOWN = timedelta(seconds=60)
 last_alert_time = {}
 
-def log_alert(message, alert_key, severity="MEDIUM", event_type="GENERAL"):
+def log_alert(
+    message,
+    alert_key,
+    severity="MEDIUM",
+    event_type="GENERAL",
+    details=None
+):
     now = datetime.now()
 
     if alert_key in last_alert_time:
@@ -23,6 +31,7 @@ def log_alert(message, alert_key, severity="MEDIUM", event_type="GENERAL"):
 
     last_alert_time[alert_key] = now
 
+    # Human-readable text alert
     timestamp = now.strftime("[%Y-%m-%d %H:%M:%S]")
     log_entry = (
         f"{timestamp} [{severity}] [{event_type}] {message}"
@@ -32,6 +41,22 @@ def log_alert(message, alert_key, severity="MEDIUM", event_type="GENERAL"):
 
     with open(ALERT_LOG, "a") as log_file:
         log_file.write(log_entry + "\n")
+
+    # Structured JSON alert
+    json_entry = {
+        "timestamp": now.isoformat(timespec="seconds"),
+        "severity": severity,
+        "event_type": event_type,
+        "message": message,
+        "alert_key": alert_key
+    }
+
+    if details:
+        json_entry.update(details)
+
+    with open(JSON_ALERT_LOG, "a") as json_file:
+        json.dump(json_entry, json_file)
+        json_file.write("\n")
 
 def detect_intrusion(packet):
     if IP in packet:
@@ -54,7 +79,13 @@ def detect_intrusion(packet):
                     f"on destination port {dport}",
                     alert_key,
                     severity="MEDIUM",
-                    event_type="SUSPICIOUS_PORT"
+                    event_type="SUSPICIOUS_PORT",
+                    details={
+                        "source_ip": ip_src,
+                        "destination_ip": ip_dst,
+                        "destination_port": dport,
+                        "protocol": "TCP"
+                    }
                 )
 
             # Detect SYN-based suspicious activity
@@ -62,7 +93,6 @@ def detect_intrusion(packet):
                 now = datetime.now()
 
                 # SYN volume detection
-
                 if ip_src not in syn_timestamps:
                     syn_timestamps[ip_src] = []
 
@@ -83,7 +113,15 @@ def detect_intrusion(packet):
                         f"{int(SYN_TIME_WINDOW.total_seconds())} seconds",
                         alert_key,
                         severity="HIGH",
-                        event_type="SYN_SCAN"
+                        event_type="SYN_SCAN",
+                        details={
+                            "source_ip": ip_src,
+                            "syn_count": len(syn_timestamps[ip_src]),
+                            "window_seconds": int(
+                                SYN_TIME_WINDOW.total_seconds()
+                            ),
+                            "protocol": "TCP"
+                        }
                     )
 
                 # Unique destination port scan detection
@@ -114,7 +152,16 @@ def detect_intrusion(packet):
                         f"{int(PORT_SCAN_TIME_WINDOW.total_seconds())} seconds",
                         alert_key,
                         severity="HIGH",
-                        event_type="PORT_SCAN"
+                        event_type="PORT_SCAN",
+                        details={
+                            "source_ip": ip_src,
+                            "destination_ip": ip_dst,
+                            "unique_ports": len(unique_ports),
+                            "window_seconds": int(
+                                PORT_SCAN_TIME_WINDOW.total_seconds()
+                            ),
+                            "protocol": "TCP"
+                        }
                     )
 
         elif UDP in packet:
