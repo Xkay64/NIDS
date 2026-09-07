@@ -2,18 +2,26 @@ from scapy.all import sniff, IP, TCP, UDP
 from datetime import datetime, timedelta
 import json
 
-ALERT_LOG = "alerts.log"
-JSON_ALERT_LOG = "alerts.jsonl"
-SUSPICIOUS_PORTS = [4444, 31337, 23]  # Backdoor/Telnet
-SYN_ONLY_THRESHOLD = 100
-SYN_TIME_WINDOW = timedelta(seconds=10)
+from config import (
+    ALERT_LOG,
+    JSON_ALERT_LOG,
+    SUSPICIOUS_PORTS,
+    SYN_ONLY_THRESHOLD,
+    SYN_TIME_WINDOW_SECONDS,
+    PORT_SCAN_THRESHOLD,
+    PORT_SCAN_TIME_WINDOW_SECONDS,
+    ALERT_COOLDOWN_SECONDS,
+)
+
+SYN_TIME_WINDOW = timedelta(seconds=SYN_TIME_WINDOW_SECONDS)
+PORT_SCAN_TIME_WINDOW = timedelta(
+    seconds=PORT_SCAN_TIME_WINDOW_SECONDS
+)
+
+ALERT_COOLDOWN = timedelta(seconds=ALERT_COOLDOWN_SECONDS)
+
 syn_timestamps = {}
-
-PORT_SCAN_THRESHOLD = 20
-PORT_SCAN_TIME_WINDOW = timedelta(seconds=10)
 port_scan_activity = {}
-
-ALERT_COOLDOWN = timedelta(seconds=60)
 last_alert_time = {}
 
 def log_alert(
