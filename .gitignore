@@ -1,3 +1,11 @@
 nids-env/
 *.log
 __pycache__/
+.venv/
+logs/*.log
+.env
+alerts.jsonl
+
+# Python cache
+__pycache__/
+*.pyc
