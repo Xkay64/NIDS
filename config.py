@@ -1,23 +1,44 @@
-# NIDS v2 configuration
+from pathlib import Path
+import tomllib
 
-# Alert output files
-ALERT_LOG = "alerts.log"
-JSON_ALERT_LOG = "alerts.jsonl"
 
-# Suspicious destination ports
-SUSPICIOUS_PORTS = {
-    23,     # Telnet
-    4444,   # Common reverse shell / backdoor port
-    31337   # Common backdoor port
-}
+CONFIG_FILE = Path(__file__).with_name("nids.toml")
 
-# SYN-volume detection
-SYN_ONLY_THRESHOLD = 100
-SYN_TIME_WINDOW_SECONDS = 10
 
-# Unique-port scan detection
-PORT_SCAN_THRESHOLD = 20
-PORT_SCAN_TIME_WINDOW_SECONDS = 10
+def load_config():
+    if not CONFIG_FILE.exists():
+        raise FileNotFoundError(
+            f"NIDS configuration file not found: {CONFIG_FILE}"
+        )
 
-# Duplicate alert suppression
-ALERT_COOLDOWN_SECONDS = 60
+    with CONFIG_FILE.open("rb") as config_file:
+        return tomllib.load(config_file)
+
+
+CONFIG = load_config()
+
+
+# Logging configuration
+ALERT_LOG = CONFIG["logging"]["text_log"]
+JSON_ALERT_LOG = CONFIG["logging"]["json_log"]
+ALERT_COOLDOWN_SECONDS = CONFIG["logging"]["alert_cooldown_seconds"]
+
+
+# Suspicious-port configuration
+SUSPICIOUS_PORTS = set(
+    CONFIG["detection"]["suspicious_ports"]["ports"]
+)
+
+
+# SYN scan configuration
+SYN_ONLY_THRESHOLD = CONFIG["detection"]["syn_scan"]["threshold"]
+SYN_TIME_WINDOW_SECONDS = CONFIG["detection"]["syn_scan"][
+    "time_window_seconds"
+]
+
+
+# Unique-port scan configuration
+PORT_SCAN_THRESHOLD = CONFIG["detection"]["port_scan"]["threshold"]
+PORT_SCAN_TIME_WINDOW_SECONDS = CONFIG["detection"]["port_scan"][
+    "time_window_seconds"
+]

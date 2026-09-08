@@ -1,0 +1,17 @@
+# NIDS v2 Configuration
+
+[logging]
+text_log = "alerts.log"
+json_log = "alerts.jsonl"
+alert_cooldown_seconds = 60
+
+[detection.suspicious_ports]
+ports = [23, 4444, 31337]
+
+[detection.syn_scan]
+threshold = 100
+time_window_seconds = 10
+
+[detection.port_scan]
+threshold = 20
+time_window_seconds = 10
